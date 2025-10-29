@@ -6,6 +6,7 @@ create table if not exists public.users (
   id uuid primary key,
   email text unique not null,
   full_name text,
+  avatar_url text,
   created_at timestamp with time zone default now()
 );
 
@@ -124,3 +125,5 @@ create policy subs_members_select on public.subscriptions
 -- Note: This requires "Supabase Storage" SQL helpers to be available in your project
 -- If not, run this via the SQL editor:
 -- select storage.create_bucket('project-files', public => true);
+-- Optionally create an avatars bucket (can be private with signed URLs)
+-- select storage.create_bucket('avatars', public => true);

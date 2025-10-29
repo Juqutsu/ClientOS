@@ -1,5 +1,6 @@
 import { requireUser } from '@/lib/auth';
 import { redirect } from 'next/navigation';
+import { cookies } from 'next/headers';
 import { getSupabaseServer } from '@/lib/supabase/server';
 import ProjectCard from '@/components/ProjectCard';
 
@@ -19,15 +20,16 @@ export default async function DashboardPage() {
   const user = await requireUser();
   const supabase = getSupabaseServer();
 
-  // Find first workspace for this user
-  const { data: membership } = await supabase
+  const cookieStore = cookies();
+  const activeCookie = cookieStore.get('active_ws')?.value || null;
+
+  // Find workspace(s) for this user
+  const { data: memberships } = await supabase
     .from('workspace_members')
     .select('workspace_id')
-    .eq('user_id', user.id)
-    .limit(1)
-    .maybeSingle();
+    .eq('user_id', user.id);
 
-  const workspaceId = membership?.workspace_id || null;
+  const workspaceId = activeCookie || (memberships && memberships[0]?.workspace_id) || null;
 
   const { data: projects } = workspaceId
     ? await supabase

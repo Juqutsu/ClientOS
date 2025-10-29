@@ -6,7 +6,7 @@ type Props = { shareId: string };
 
 export default function ShareLink({ shareId }: Props) {
   const [copied, setCopied] = useState(false);
-  const url = `${process.env.NEXT_PUBLIC_APP_URL || ''}/clients/${shareId}`;
+  const url = `${process.env.NEXT_PUBLIC_APP_URL || ''}/share/${shareId}`;
 
   async function copy() {
     await navigator.clipboard.writeText(url);

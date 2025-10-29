@@ -20,6 +20,15 @@ export default async function ProjectPage({ params }: { params: { id: string } }
     );
   }
 
+  async function ensureShareId(formData: FormData) {
+    'use server';
+    const supabase = getSupabaseServer();
+    const id = String(formData.get('project_id') || '');
+    if (!id) return;
+    const newId = Math.random().toString(36).slice(2, 10);
+    await supabase.from('projects').update({ share_id: newId }).eq('id', id);
+  }
+
   return (
     <main className="p-6 space-y-6">
       <div>
@@ -37,7 +46,14 @@ export default async function ProjectPage({ params }: { params: { id: string } }
 
       <div className="space-y-2">
         <h2 className="font-semibold">Teilen</h2>
-        {project.share_id ? <ShareLink shareId={project.share_id} /> : null}
+        {project.share_id ? (
+          <ShareLink shareId={project.share_id} />
+        ) : (
+          <form action={ensureShareId}>
+            <input type="hidden" name="project_id" value={project.id} />
+            <button type="submit" className="px-3 py-2 border rounded-md bg-white hover:bg-gray-50">Share-Link erzeugen</button>
+          </form>
+        )}
       </div>
 
       <div className="flex items-center gap-3">

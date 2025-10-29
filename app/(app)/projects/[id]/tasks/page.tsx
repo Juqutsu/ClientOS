@@ -20,13 +20,22 @@ export default async function ProjectTasksPage({ params }: { params: { id: strin
     await supabase.from('tasks').insert({ project_id: projectId, title });
   }
 
-  async function toggleTask(formData: FormData) {
+  async function cycleTask(formData: FormData) {
     'use server';
     const supabase = getSupabaseServer();
     const taskId = String(formData.get('task_id') || '');
-    const status = String(formData.get('status') || 'todo');
+    const current = String(formData.get('current_status') || 'todo');
     if (!taskId) return;
-    await supabase.from('tasks').update({ status }).eq('id', taskId);
+    const next = current === 'todo' ? 'in_progress' : current === 'in_progress' ? 'done' : 'todo';
+    await supabase.from('tasks').update({ status: next }).eq('id', taskId);
+  }
+
+  async function deleteTask(formData: FormData) {
+    'use server';
+    const supabase = getSupabaseServer();
+    const taskId = String(formData.get('task_id') || '');
+    if (!taskId) return;
+    await supabase.from('tasks').delete().eq('id', taskId);
   }
 
   return (
@@ -39,18 +48,29 @@ export default async function ProjectTasksPage({ params }: { params: { id: strin
         <button type="submit" className="px-3 py-2 border rounded-md bg-white hover:bg-gray-50">Hinzufügen</button>
       </form>
 
-      {/* Simple server action form per task for toggling */}
+      {/* Aufgabenliste mit Statuswechsel und Löschen */}
       <div className="mt-4 space-y-2">
-        {(tasks || []).map((t) => (
-          <form key={t.id} action={toggleTask} className="flex items-center gap-2 border rounded-md px-3 py-2">
-            <input type="hidden" name="task_id" value={t.id} />
-            <input type="hidden" name="status" value={t.status === 'done' ? 'todo' : 'done'} />
-            <button className="h-4 w-4 border rounded-sm flex items-center justify-center bg-white">
-              {t.status === 'done' ? '✓' : ''}
-            </button>
-            <span className={t.status === 'done' ? 'line-through text-gray-400' : ''}>{t.title}</span>
-          </form>
-        ))}
+        {(tasks || []).map((t) => {
+          const label = t.status === 'todo' ? 'Offen' : t.status === 'in_progress' ? 'In Arbeit' : 'Erledigt';
+          return (
+            <div key={t.id} className="flex items-center justify-between border rounded-md px-3 py-2">
+              <div className="flex items-center gap-3 min-w-0">
+                <form action={cycleTask} className="flex items-center gap-2 shrink-0">
+                  <input type="hidden" name="task_id" value={t.id} />
+                  <input type="hidden" name="current_status" value={t.status || 'todo'} />
+                  <button type="submit" title="Status wechseln" className="px-2 py-1 text-xs rounded-md border bg-white hover:bg-gray-50">
+                    {label}
+                  </button>
+                </form>
+                <span className={`truncate ${t.status === 'done' ? 'line-through text-gray-400' : ''}`}>{t.title}</span>
+              </div>
+              <form action={deleteTask}>
+                <input type="hidden" name="task_id" value={t.id} />
+                <button type="submit" className="text-red-600 text-sm hover:underline">Löschen</button>
+              </form>
+            </div>
+          );
+        })}
       </div>
     </main>
   );

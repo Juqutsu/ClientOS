@@ -43,6 +43,17 @@ export async function POST(req: Request) {
         }
         break;
       }
+      case 'checkout.session.expired': {
+        const session = event.data.object as Stripe.Checkout.Session;
+        const customerId = session.customer as string | null;
+        if (customerId) {
+          await admin
+            .from('subscriptions')
+            .update({ status: 'incomplete_expired' })
+            .eq('stripe_customer_id', customerId);
+        }
+        break;
+      }
       case 'customer.subscription.updated':
       case 'customer.subscription.deleted': {
         const subscription = event.data.object as Stripe.Subscription;
@@ -51,6 +62,24 @@ export async function POST(req: Request) {
         await admin
           .from('subscriptions')
           .update({ status })
+          .eq('stripe_customer_id', customerId);
+        break;
+      }
+      case 'customer.subscription.trial_will_end': {
+        const subscription = event.data.object as Stripe.Subscription;
+        const customerId = subscription.customer as string;
+        await admin
+          .from('subscriptions')
+          .update({ status: 'trialing' })
+          .eq('stripe_customer_id', customerId);
+        break;
+      }
+      case 'invoice.payment_failed': {
+        const invoice = event.data.object as Stripe.Invoice;
+        const customerId = (invoice.customer as string) || '';
+        await admin
+          .from('subscriptions')
+          .update({ status: 'past_due' })
           .eq('stripe_customer_id', customerId);
         break;
       }

@@ -1,4 +1,5 @@
 import { requireUser } from '@/lib/auth';
+import { redirect } from 'next/navigation';
 import { getSupabaseServer } from '@/lib/supabase/server';
 import ProjectCard from '@/components/ProjectCard';
 
@@ -54,6 +55,23 @@ export default async function DashboardPage() {
       .maybeSingle();
     const wsId = mem?.workspace_id;
     if (!wsId) return;
+
+    // Enforce Free plan limit: max 3 Projekte ohne aktive Subscription
+    const { data: sub } = await supabase
+      .from('subscriptions')
+      .select('status')
+      .eq('workspace_id', wsId)
+      .maybeSingle();
+    const { count } = await supabase
+      .from('projects')
+      .select('id', { count: 'exact', head: true })
+      .eq('workspace_id', wsId);
+    const isActive = sub?.status === 'active';
+    const maxFree = 3;
+    if (!isActive && (count || 0) >= maxFree) {
+      // Redirect to pricing if limit reached
+      redirect('/pricing?limit=1');
+    }
 
     await supabase.from('projects').insert({
       workspace_id: wsId,

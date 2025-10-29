@@ -6,7 +6,10 @@ export default function Sidebar() {
       <div className="font-bold text-lg mb-6">Client Portal</div>
       <nav className="space-y-2">
         <Link href="/dashboard" className="block px-2 py-1 rounded hover:bg-gray-100">Dashboard</Link>
+        <Link href="/pricing" className="block px-2 py-1 rounded hover:bg-gray-100">Pricing</Link>
         <Link href="/settings/billing" className="block px-2 py-1 rounded hover:bg-gray-100">Billing</Link>
+        <Link href="/settings/profile" className="block px-2 py-1 rounded hover:bg-gray-100">Profil</Link>
+        <Link href="/settings/workspace" className="block px-2 py-1 rounded hover:bg-gray-100">Workspace</Link>
       </nav>
     </aside>
   );

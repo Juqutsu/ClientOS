@@ -1,4 +1,4 @@
-type Task = { id: string; title: string; status: 'todo' | 'doing' | 'done' };
+type Task = { id: string; title: string; status: 'todo' | 'in_progress' | 'done' };
 
 type Props = {
   tasks: Task[];

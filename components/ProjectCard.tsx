@@ -1,3 +1,5 @@
+import Link from 'next/link';
+
 type Props = {
   name: string;
   clientName?: string | null;
@@ -17,9 +19,9 @@ export default function ProjectCard({ name, clientName, description, href }: Pro
   );
   if (href) {
     return (
-      <a href={href} className="block">
+      <Link href={href} className="block">
         {content}
-      </a>
+      </Link>
     );
   }
   return content;

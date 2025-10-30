@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { getSupabaseBrowser } from '@/lib/supabase/client';
 import FileUpload from '@/components/FileUpload';
 import type { FileRecord } from './types';
+import type { Entitlements } from '@/lib/billing/entitlements';
 
 const PAGE_SIZE = 20;
 
@@ -30,9 +31,10 @@ type Props = {
   projectId: string;
   initialFiles: FileRecord[];
   initialTotal: number;
+  entitlements?: Entitlements;
 };
 
-export default function FileManager({ projectId, initialFiles, initialTotal }: Props) {
+export default function FileManager({ projectId, initialFiles, initialTotal, entitlements }: Props) {
   const supabase = useMemo(() => getSupabaseBrowser(), []);
   const [files, setFiles] = useState<FileRecord[]>(initialFiles);
   const [total, setTotal] = useState(initialTotal);
@@ -395,7 +397,13 @@ export default function FileManager({ projectId, initialFiles, initialTotal }: P
           projectId={projectId}
           existingFolders={folders}
           onUploaded={handleUploaded}
+          maxFileSizeMb={entitlements?.maxFileSizeMb ?? undefined}
         />
+        {entitlements?.maxDailyUploads !== null && entitlements?.maxDailyUploads !== undefined ? (
+          <p className="mt-3 text-xs text-gray-500">
+            Tageslimit: {entitlements.maxDailyUploads} Uploads pro Workspace (letzte 24 Stunden)
+          </p>
+        ) : null}
       </section>
 
       <section className="card-gradient p-6">

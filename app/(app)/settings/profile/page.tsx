@@ -2,6 +2,7 @@ import { requireUser } from '@/lib/auth';
 import { getSupabaseServer } from '@/lib/supabase/server';
 import AvatarUpload from '@/components/AvatarUpload';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { getSignedAvatarUrl } from '@/lib/storage/avatar';
 
 export default async function ProfilePage() {
   const user = await requireUser();
@@ -9,9 +10,13 @@ export default async function ProfilePage() {
 
   const { data: profile } = await supabase
     .from('users')
-    .select('email, full_name, avatar_url')
+    .select('email, full_name, avatar_url, avatar_storage_path')
     .eq('id', user.id)
     .maybeSingle();
+
+  const avatarUrl = profile?.avatar_storage_path
+    ? await getSignedAvatarUrl(profile.avatar_storage_path)
+    : profile?.avatar_url || null;
 
   async function updateProfile(formData: FormData) {
     'use server';
@@ -60,9 +65,9 @@ export default async function ProfilePage() {
           </h2>
           <div className="flex items-center gap-6">
             <div className="relative">
-              {profile?.avatar_url ? (
+            {avatarUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={profile.avatar_url} alt="Avatar" loading="lazy" className="h-24 w-24 rounded-full object-cover border-4 border-primary-200 shadow-lg" />
+                <img src={avatarUrl} alt="Avatar" loading="lazy" className="h-24 w-24 rounded-full object-cover border-4 border-primary-200 shadow-lg" />
               ) : (
                 <div className="h-24 w-24 rounded-full bg-gradient-to-br from-primary-200 to-accent-200 flex items-center justify-center">
                   <svg className="w-12 h-12 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">

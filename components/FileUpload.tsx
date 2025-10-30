@@ -10,10 +10,10 @@ type Props = {
   projectId: string;
   existingFolders?: string[];
   onUploaded?: (file: FileRecord) => void;
+  maxFileSizeMb?: number;
 };
 
 const DEFAULT_MAX_SIZE_MB = Number(process.env.NEXT_PUBLIC_MAX_FILE_SIZE_MB || '50');
-const MAX_FILE_SIZE_BYTES = DEFAULT_MAX_SIZE_MB * 1024 * 1024;
 const ALLOWED_MIME_TYPES = [
   'image/png',
   'image/jpeg',
@@ -28,13 +28,15 @@ const ALLOWED_MIME_TYPES = [
 ];
 const ALLOWED_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'pdf', 'docx', 'xlsx', 'txt', 'zip'];
 
-export default function FileUpload({ projectId, existingFolders = [], onUploaded }: Props) {
+export default function FileUpload({ projectId, existingFolders = [], onUploaded, maxFileSizeMb }: Props) {
   const supabase = useMemo(() => getSupabaseBrowser(), []);
   const [items, setItems] = useState<UploadingItem[]>([]);
   const [dragOver, setDragOver] = useState(false);
   const [folder, setFolder] = useState('');
   const [tagsInput, setTagsInput] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
+  const effectiveMaxSizeMb = maxFileSizeMb ?? DEFAULT_MAX_SIZE_MB;
+  const maxFileSizeBytes = effectiveMaxSizeMb * 1024 * 1024;
 
   const parseTags = useCallback(() => {
     return tagsInput
@@ -83,8 +85,8 @@ export default function FileUpload({ projectId, existingFolders = [], onUploaded
       for (const file of list) {
         const itemId = registerItem(file.name);
 
-        if (file.size > MAX_FILE_SIZE_BYTES) {
-          reportError(itemId, `Datei zu groß (max. ${DEFAULT_MAX_SIZE_MB}MB)`);
+        if (file.size > maxFileSizeBytes) {
+          reportError(itemId, `Datei zu groß (max. ${effectiveMaxSizeMb}MB)`);
           continue;
         }
 
@@ -221,7 +223,7 @@ export default function FileUpload({ projectId, existingFolders = [], onUploaded
             Dateien hochladen
           </span>
           <p className="text-sm text-gray-600 mt-1">
-            Unterstützte Formate: Bilder, PDF, DOCX, XLSX, ZIP, TXT (max. {DEFAULT_MAX_SIZE_MB}MB)
+            Unterstützte Formate: Bilder, PDF, DOCX, XLSX, ZIP, TXT (max. {effectiveMaxSizeMb}MB)
           </p>
         </div>
       </label>

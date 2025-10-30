@@ -7,6 +7,7 @@ create table if not exists public.users (
   email text unique not null,
   full_name text,
   avatar_url text,
+  avatar_storage_path text,
   created_at timestamp with time zone default now()
 );
 
@@ -32,11 +33,15 @@ create table if not exists public.workspace_audit_logs (
   action text not null,
   actor_id uuid references public.users(id),
   target_id uuid references public.users(id),
+  resource_type text,
+  resource_id text,
+  summary text,
   metadata jsonb default '{}'::jsonb,
   created_at timestamp with time zone default now()
 );
 
 create index if not exists workspace_audit_logs_workspace_idx on public.workspace_audit_logs (workspace_id, created_at desc);
+create index if not exists workspace_audit_logs_resource_idx on public.workspace_audit_logs (workspace_id, resource_type, resource_id);
 
 create table if not exists public.projects (
   id uuid primary key default gen_random_uuid(),
@@ -64,6 +69,7 @@ create table if not exists public.files (
   id uuid primary key default gen_random_uuid(),
   project_id uuid references public.projects(id) on delete cascade,
   file_url text,
+  storage_path text,
   file_name text,
   uploaded_by uuid references public.users(id),
   file_size bigint,
@@ -83,8 +89,28 @@ create table if not exists public.subscriptions (
   stripe_customer_id text,
   stripe_subscription_id text,
   status text,
-  plan text default 'starter'
+  plan text default 'starter',
+  trial_started_at timestamp with time zone,
+  trial_ends_at timestamp with time zone,
+  entitlements jsonb default '{}'::jsonb,
+  updated_at timestamp with time zone default now()
 );
+
+create index if not exists subscriptions_workspace_idx on public.subscriptions (workspace_id);
+create index if not exists subscriptions_status_idx on public.subscriptions (status);
+
+create table if not exists public.stripe_event_logs (
+  id text primary key,
+  type text not null,
+  workspace_id uuid references public.workspaces(id) on delete cascade,
+  status text default 'pending' check (status in ('pending','processed','error')),
+  error_message text,
+  payload jsonb,
+  created_at timestamp with time zone default now(),
+  processed_at timestamp with time zone
+);
+
+create index if not exists stripe_event_logs_workspace_idx on public.stripe_event_logs (workspace_id, created_at desc);
 
 -- Row Level Security
 alter table public.users enable row level security;

@@ -1,15 +1,28 @@
 import FileManager from '@/components/files/FileManager';
 import { requireUser } from '@/lib/auth';
 import { getSupabaseServer } from '@/lib/supabase/server';
+import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { getEntitlementSummary } from '@/lib/billing/subscriptions';
 
 export default async function ProjectFilesPage({ params }: { params: { id: string } }) {
   await requireUser();
   const supabase = getSupabaseServer();
+  const admin = getSupabaseAdmin();
+
+  const { data: project } = await supabase
+    .from('projects')
+    .select('workspace_id')
+    .eq('id', params.id)
+    .maybeSingle<{ workspace_id: string }>();
+
+  const entitlementSummary = project?.workspace_id
+    ? await getEntitlementSummary(project.workspace_id, admin)
+    : null;
 
   const [{ data: initialFiles }, { count }] = await Promise.all([
     supabase
       .from('files')
-      .select('id, project_id, file_name, file_url, preview_url, folder, tags, mime_type, file_size, scan_status, created_at, updated_at')
+      .select('id, project_id, file_name, file_url, storage_path, preview_url, folder, tags, mime_type, file_size, scan_status, created_at, updated_at')
       .eq('project_id', params.id)
       .order('created_at', { ascending: false })
       .limit(20),
@@ -18,6 +31,25 @@ export default async function ProjectFilesPage({ params }: { params: { id: strin
       .select('id', { count: 'exact', head: true })
       .eq('project_id', params.id),
   ]);
+
+  const hydratedFiles = initialFiles
+    ? await Promise.all(
+        initialFiles.map(async (file) => {
+          if (file.storage_path) {
+            const { data: signed } = await admin
+              .storage
+              .from('project-files')
+              .createSignedUrl(file.storage_path, 60 * 30);
+            const signedUrl = signed?.signedUrl ?? file.file_url;
+            const previewUrl = signedUrl && (file.mime_type?.startsWith('image/') || file.mime_type === 'application/pdf')
+              ? signedUrl
+              : file.preview_url;
+            return { ...file, file_url: signedUrl, preview_url: previewUrl };
+          }
+          return file;
+        })
+      )
+    : [];
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 p-6">
@@ -36,8 +68,9 @@ export default async function ProjectFilesPage({ params }: { params: { id: strin
 
         <FileManager
           projectId={params.id}
-          initialFiles={initialFiles || []}
-          initialTotal={typeof count === 'number' ? count : initialFiles?.length || 0}
+          initialFiles={hydratedFiles}
+          initialTotal={typeof count === 'number' ? count : hydratedFiles.length}
+          entitlements={entitlementSummary?.entitlements}
         />
       </div>
     </main>

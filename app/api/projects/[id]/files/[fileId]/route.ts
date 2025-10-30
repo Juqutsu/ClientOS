@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseServer } from '@/lib/supabase/server';
+import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { logAuditEvent } from '@/lib/audit';
 import { z } from 'zod';
 
 const sanitizeFolder = (value: string) => {
@@ -32,6 +34,15 @@ export async function PATCH(
   } = await supabase.auth.getUser();
   if (!user) {
     return new NextResponse('Unauthorized', { status: 401 });
+  }
+
+  const { data: project } = await supabase
+    .from('projects')
+    .select('workspace_id')
+    .eq('id', params.id)
+    .maybeSingle<{ workspace_id: string }>();
+  if (!project?.workspace_id) {
+    return new NextResponse('Not Found', { status: 404 });
   }
 
   const body = await req.json();
@@ -72,6 +83,21 @@ export async function PATCH(
     return new NextResponse(error.message, { status: 400 });
   }
 
+  const admin = getSupabaseAdmin();
+  await logAuditEvent({
+    workspaceId: project.workspace_id,
+    action: 'files.metadata_updated',
+    actorId: user.id,
+    resourceType: 'file',
+    resourceId: data.id,
+    summary: `Metadaten für ${data.file_name} geändert`,
+    metadata: {
+      project_id: params.id,
+      folder: data.folder,
+      tags: data.tags,
+    },
+  }, admin);
+
   return NextResponse.json({ file: data });
 }
 
@@ -87,9 +113,20 @@ export async function DELETE(
     return new NextResponse('Unauthorized', { status: 401 });
   }
 
+  const { data: project } = await supabase
+    .from('projects')
+    .select('workspace_id')
+    .eq('id', params.id)
+    .maybeSingle<{ workspace_id: string }>();
+  if (!project?.workspace_id) {
+    return new NextResponse('Not Found', { status: 404 });
+  }
+
+  const admin = getSupabaseAdmin();
+
   const { data: file, error: selectError } = await supabase
     .from('files')
-    .select('id, file_url')
+    .select('id, file_url, storage_path, file_name')
     .eq('id', params.fileId)
     .eq('project_id', params.id)
     .maybeSingle();
@@ -102,13 +139,8 @@ export async function DELETE(
     return new NextResponse('Not Found', { status: 404 });
   }
 
-  if (file.file_url) {
-    const marker = '/project-files/';
-    const index = file.file_url.indexOf(marker);
-    if (index !== -1) {
-      const storagePath = decodeURIComponent(file.file_url.slice(index + marker.length));
-      await supabase.storage.from('project-files').remove([storagePath]);
-    }
+  if (file.storage_path) {
+    await admin.storage.from('project-files').remove([file.storage_path]);
   }
 
   const { error: deleteError } = await supabase
@@ -120,6 +152,18 @@ export async function DELETE(
   if (deleteError) {
     return new NextResponse(deleteError.message, { status: 400 });
   }
+
+  await logAuditEvent({
+    workspaceId: project.workspace_id,
+    action: 'files.deleted',
+    actorId: user.id,
+    resourceType: 'file',
+    resourceId: file.id,
+    summary: file.file_name ? `Datei ${file.file_name} gelöscht` : 'Datei gelöscht',
+    metadata: {
+      project_id: params.id,
+    },
+  }, admin);
 
   return NextResponse.json({ ok: true });
 }

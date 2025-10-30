@@ -3,6 +3,7 @@ import { getStripe } from '@/lib/stripe';
 import { getSupabaseServer } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { cookies } from 'next/headers';
+import { resolveEntitlements } from '@/lib/billing/entitlements';
 
 export default async function BillingPage() {
   await requireUser();
@@ -24,7 +25,14 @@ export default async function BillingPage() {
       .maybeSingle();
     workspaceId = membership?.workspace_id || null;
   }
-  type SubscriptionRow = { status: string | null; plan: string | null; stripe_customer_id: string | null };
+  type SubscriptionRow = {
+    status: string | null;
+    plan: string | null;
+    stripe_customer_id: string | null;
+    trial_started_at: string | null;
+    trial_ends_at: string | null;
+    entitlements: Record<string, unknown> | null;
+  };
   let subscription: SubscriptionRow | null = null;
   if (workspaceId) {
     const { data } = await supabase
@@ -129,8 +137,15 @@ export default async function BillingPage() {
     redirect(portal.url);
   }
 
+  const summary = subscription ? resolveEntitlements(subscription) : null;
   const status = subscription?.status || 'inactive';
-  const isActive = status === 'active' || status === 'trialing';
+  const isActive = summary?.isActiveSubscriber ?? false;
+  const trialInfo = summary?.trial;
+  const planLabels: Record<string, string> = { free: 'Free', starter: 'Starter', pro: 'Pro' };
+  const planName = summary ? planLabels[summary.plan] ?? summary.plan : 'Free';
+  const trialEndsAtLabel = trialInfo?.trialEndsAt
+    ? new Intl.DateTimeFormat('de-DE', { dateStyle: 'medium' }).format(trialInfo.trialEndsAt)
+    : null;
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 p-6">
@@ -157,7 +172,7 @@ export default async function BillingPage() {
               <div>
                 <div className="text-sm font-medium text-gray-600 mb-1">Aktueller Plan</div>
                 <div className="text-2xl font-bold bg-gradient-to-r from-primary-600 to-accent-600 bg-clip-text text-transparent capitalize">
-                  {subscription?.plan || 'Free'}
+                  {planName}
                 </div>
               </div>
               <div>
@@ -170,6 +185,31 @@ export default async function BillingPage() {
                 </span>
               </div>
             </div>
+            {trialInfo?.isInTrial ? (
+              <div className="mt-4 rounded-lg border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-700">
+                Testphase: noch {trialInfo.trialDaysRemaining ?? 0} Tage{trialEndsAtLabel ? ` (bis ${trialEndsAtLabel})` : ''}.
+              </div>
+            ) : null}
+            {summary ? (
+              <dl className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm text-gray-600">
+                <div className="p-3 border border-gray-200 rounded-lg bg-white/60">
+                  <dt className="font-semibold">Projektlimit</dt>
+                  <dd>{summary.entitlements.maxProjects === null ? 'Unbegrenzt' : `${summary.entitlements.maxProjects} Projekte`}</dd>
+                </div>
+                <div className="p-3 border border-gray-200 rounded-lg bg-white/60">
+                  <dt className="font-semibold">Teamgröße</dt>
+                  <dd>{summary.entitlements.maxTeamMembers === null ? 'Unbegrenzt' : `${summary.entitlements.maxTeamMembers} Mitglieder`}</dd>
+                </div>
+                <div className="p-3 border border-gray-200 rounded-lg bg-white/60">
+                  <dt className="font-semibold">Max. Dateigröße</dt>
+                  <dd>{summary.entitlements.maxFileSizeMb} MB</dd>
+                </div>
+                <div className="p-3 border border-gray-200 rounded-lg bg-white/60">
+                  <dt className="font-semibold">Uploads pro Tag</dt>
+                  <dd>{summary.entitlements.maxDailyUploads === null ? 'Unbegrenzt' : `${summary.entitlements.maxDailyUploads}`}</dd>
+                </div>
+              </dl>
+            ) : null}
             <div className="mt-6 pt-6 border-t flex flex-wrap gap-3">
               {!isActive ? (
                 <form action={startCheckout}>

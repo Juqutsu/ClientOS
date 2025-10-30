@@ -3,6 +3,7 @@ export type FileRecord = {
   project_id: string;
   file_name: string;
   file_url: string;
+  storage_path: string | null;
   preview_url: string | null;
   folder: string | null;
   tags: string[] | null;

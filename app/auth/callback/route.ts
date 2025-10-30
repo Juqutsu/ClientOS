@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { ensureWorkspaceSubscription } from "@/lib/billing/subscriptions";
 
 export async function GET(req: Request) {
   const url = new URL(req.url);
@@ -76,7 +77,15 @@ export async function GET(req: Request) {
             await admin
               .from("workspace_members")
               .insert({ workspace_id: ws.id, user_id: user.id, role: "owner" });
+            await ensureWorkspaceSubscription(ws.id, { client: admin });
           }
+        }
+
+        const primaryWorkspaceId =
+          createdWorkspaceId ?? existingMemberships?.[0]?.workspace_id ?? null;
+
+        if (!createdWorkspaceId && primaryWorkspaceId) {
+          await ensureWorkspaceSubscription(primaryWorkspaceId, { client: admin });
         }
 
         // If we just created a workspace, set it active via cookie

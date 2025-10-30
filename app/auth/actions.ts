@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { headers } from "next/headers";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { ensureWorkspaceSubscription } from "@/lib/billing/subscriptions";
 
 export async function signup(formData: FormData) {
   const email = String(formData.get("email") || "").trim();
@@ -43,6 +44,7 @@ export async function signup(formData: FormData) {
       await admin
         .from("workspace_members")
         .insert({ workspace_id: ws.id, user_id: user.id, role: "owner" });
+      await ensureWorkspaceSubscription(ws.id, { client: admin });
     }
   } catch (_) {
     // Fallback: use authenticated client with RLS policies
@@ -61,6 +63,11 @@ export async function signup(formData: FormData) {
       await supabase
         .from("workspace_members")
         .insert({ workspace_id: ws.id, user_id: user.id, role: "owner" });
+      try {
+        await ensureWorkspaceSubscription(ws.id);
+      } catch (subscriptionError) {
+        console.warn('[signup] Failed to provision subscription for workspace', subscriptionError);
+      }
     }
   }
 

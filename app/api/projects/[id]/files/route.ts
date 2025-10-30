@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseServer } from '@/lib/supabase/server';
 import { z } from 'zod';
-import { env } from '@/lib/env';
+import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { getEntitlementSummary } from '@/lib/billing/subscriptions';
+import { logAuditEvent } from '@/lib/audit';
 
 // Simple in-memory rate limiter per IP
 const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
@@ -23,15 +25,7 @@ const ALLOWED_MIME_TYPES = [
 
 const ALLOWED_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'pdf', 'docx', 'xlsx', 'txt', 'zip'];
 
-const MAX_FILE_SIZE_BYTES = Number(process.env.NEXT_PUBLIC_MAX_FILE_SIZE_MB || '50') * 1024 * 1024;
-
 export async function POST(req: Request, { params }: { params: { id: string } }) {
-  const origin = req.headers.get('origin') || '';
-  const allowed = env.NEXT_PUBLIC_APP_URL;
-  if (allowed && origin && !origin.startsWith(allowed)) {
-    return new NextResponse('Forbidden', { status: 403 });
-  }
-
   const ip = (req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || '').split(',')[0] || 'unknown';
   const now = Date.now();
   const rec = ipHits.get(ip);
@@ -51,6 +45,21 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   } = await supabase.auth.getUser();
   if (!user) return new NextResponse('Unauthorized', { status: 401 });
 
+  const { data: projectRow } = await supabase
+    .from('projects')
+    .select('workspace_id')
+    .eq('id', params.id)
+    .maybeSingle<{ workspace_id: string }>();
+
+  if (!projectRow?.workspace_id) {
+    return new NextResponse('Not Found', { status: 404 });
+  }
+
+  const admin = getSupabaseAdmin();
+  const entitlementSummary = await getEntitlementSummary(projectRow.workspace_id, admin);
+  const { entitlements } = entitlementSummary;
+  const maxFileSizeBytes = (entitlements.maxFileSizeMb ?? Number(process.env.NEXT_PUBLIC_MAX_FILE_SIZE_MB || '50')) * 1024 * 1024;
+
   const body = await req.json();
   const schema = z.object({
     file_name: z.string().min(1).max(255),
@@ -67,8 +76,27 @@ export async function POST(req: Request, { params }: { params: { id: string } })
 
   const { file_name: fileName, path, mime_type: rawMime, file_size: rawSize, folder: rawFolder, tags: rawTags } = parsed.data;
 
-  if (rawSize && rawSize > MAX_FILE_SIZE_BYTES) {
-    return new NextResponse('Datei überschreitet das Größenlimit', { status: 400 });
+  if (rawSize && rawSize > maxFileSizeBytes) {
+    return new NextResponse(`Datei überschreitet das Größenlimit (${entitlements.maxFileSizeMb ?? Number(process.env.NEXT_PUBLIC_MAX_FILE_SIZE_MB || '50')}MB)`, { status: 400 });
+  }
+
+  if (entitlements.maxDailyUploads !== null) {
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const { data: workspaceProjects } = await admin
+      .from('projects')
+      .select('id')
+      .eq('workspace_id', projectRow.workspace_id);
+    const projectIds = (workspaceProjects || []).map((p) => p.id);
+    if (projectIds.length) {
+      const { count: uploadsInWindow } = await admin
+        .from('files')
+        .select('id', { count: 'exact', head: true })
+        .in('project_id', projectIds)
+        .gte('created_at', since);
+      if ((uploadsInWindow || 0) >= entitlements.maxDailyUploads) {
+        return new NextResponse('Tageslimit für Uploads erreicht. Bitte später erneut versuchen oder upgraden.', { status: 429 });
+      }
+    }
   }
 
   const extension = fileName.split('.').pop()?.toLowerCase();
@@ -85,15 +113,24 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   const folder = rawFolder ? sanitizeFolder(rawFolder) : null;
   const tags = uniqueStrings((rawTags ?? []).map((tag) => tag.trim()).filter((tag) => tag.length > 0));
 
-  const publicUrl = `${env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/project-files/${encodeURI(path)}`;
-  const previewUrl = mimeType && (mimeType.startsWith('image/') || mimeType === 'application/pdf') ? publicUrl : null;
+  const storagePath = path;
+  const { data: signedUrlData, error: signedUrlError } = await admin
+    .storage
+    .from('project-files')
+    .createSignedUrl(storagePath, 60 * 60 * 6);
+  if (signedUrlError) {
+    return new NextResponse('Konnte keine Zugriff-URL generieren', { status: 400 });
+  }
+  const signedUrl = signedUrlData?.signedUrl ?? null;
+  const previewUrl = signedUrl && (mimeType?.startsWith('image/') || mimeType === 'application/pdf') ? signedUrl : null;
 
   const { data: fileRecord, error } = await supabase
     .from('files')
     .insert({
       project_id: params.id,
       file_name: fileName,
-      file_url: publicUrl,
+      file_url: signedUrl,
+      storage_path: storagePath,
       preview_url: previewUrl,
       uploaded_by: user.id,
       mime_type: mimeType,
@@ -103,18 +140,32 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       scan_status: 'pending',
       updated_at: new Date().toISOString(),
     })
-    .select('id, project_id, file_name, file_url, preview_url, folder, tags, mime_type, file_size, scan_status, created_at, updated_at')
+    .select('id, project_id, file_name, file_url, storage_path, preview_url, folder, tags, mime_type, file_size, scan_status, created_at, updated_at')
     .single();
 
   if (error) {
     return new NextResponse(error.message, { status: 400 });
   }
 
+  await logAuditEvent({
+    workspaceId: projectRow.workspace_id,
+    action: 'files.uploaded',
+    actorId: user.id,
+    resourceType: 'file',
+    resourceId: fileRecord.id,
+    summary: `Datei ${fileName} hochgeladen`,
+    metadata: {
+      project_id: params.id,
+      file_size: rawSize ?? null,
+      mime_type: mimeType,
+    },
+  }, admin);
+
   triggerVirusScan({
     fileId: fileRecord.id,
     projectId: params.id,
-    storagePath: path,
-    publicUrl,
+    storagePath,
+    publicUrl: signedUrl || '',
     mimeType,
     fileSize: rawSize ?? null,
     userId: user.id,

@@ -1,11 +1,13 @@
 "use client";
 import { useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { getSupabaseBrowser } from '@/lib/supabase/client';
 
 export default function AvatarUpload() {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const router = useRouter();
 
   async function onChange(e: React.ChangeEvent<HTMLInputElement>) {
     setError(null);
@@ -23,12 +25,19 @@ export default function AvatarUpload() {
     setUploading(true);
     try {
       const supabase = getSupabaseBrowser();
-      const path = `avatars/${Date.now()}_${file.name}`;
-      const { error: upErr } = await supabase.storage.from('avatars').upload(path, file);
+      const path = `avatars/${Date.now()}_${Math.random().toString(36).slice(2, 10)}_${file.name.replace(/[^a-zA-Z0-9_.-]+/g, '_')}`;
+      const { error: upErr } = await supabase.storage.from('avatars').upload(path, file, {
+        cacheControl: '3600',
+        upsert: true,
+      });
       if (upErr) throw upErr;
-      const publicUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${encodeURI(path)}`;
-      const res = await fetch('/api/profile/avatar', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ url: publicUrl }) });
+      const res = await fetch('/api/profile/avatar', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ path }),
+      });
       if (!res.ok) throw new Error('Update fehlgeschlagen');
+      router.refresh();
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : 'Upload fehlgeschlagen';
       setError(message);

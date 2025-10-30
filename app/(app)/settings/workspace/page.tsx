@@ -1,6 +1,8 @@
 import { requireUser } from '@/lib/auth';
 import { getSupabaseServer } from '@/lib/supabase/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { ensureWorkspaceSubscription, getEntitlementSummary } from '@/lib/billing/subscriptions';
+import { logAuditEvent } from '@/lib/audit';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
@@ -92,15 +94,24 @@ async function recordAuditLog(params: {
   actorId: string;
   targetId?: string | null;
   metadata?: Record<string, unknown>;
+  resourceType?: string | null;
+  resourceId?: string | null;
+  summary?: string | null;
 }) {
   const admin = getSupabaseAdmin();
-  await admin.from('workspace_audit_logs').insert({
-    workspace_id: params.workspaceId,
-    action: params.action,
-    actor_id: params.actorId,
-    target_id: params.targetId ?? null,
-    metadata: params.metadata ?? {},
-  });
+  await logAuditEvent(
+    {
+      workspaceId: params.workspaceId,
+      action: params.action,
+      actorId: params.actorId,
+      targetId: params.targetId ?? null,
+      metadata: params.metadata ?? {},
+      resourceType: params.resourceType ?? 'workspace_member',
+      resourceId: params.resourceId ?? params.targetId ?? null,
+      summary: params.summary ?? null,
+    },
+    admin
+  );
 }
 
 export default async function WorkspaceSettingsPage() {
@@ -510,6 +521,17 @@ async function InviteSection({ workspaceId, actorRole }: { workspaceId: string; 
       return;
     }
 
+    const entitlementSummary = await getEntitlementSummary(wsId, admin);
+    if (entitlementSummary.entitlements.maxTeamMembers !== null) {
+      const { count: memberCount } = await admin
+        .from('workspace_members')
+        .select('id', { count: 'exact', head: true })
+        .eq('workspace_id', wsId);
+      if ((memberCount || 0) >= entitlementSummary.entitlements.maxTeamMembers) {
+        redirect('/pricing?limit=team');
+      }
+    }
+
     let desiredRole: WorkspaceRole = isWorkspaceRole(role) ? role : 'member';
     if (membership.role !== 'owner' && desiredRole === 'owner') {
       desiredRole = 'admin';
@@ -673,6 +695,7 @@ async function CreateWorkspaceSection() {
         await admin
           .from('workspace_members')
           .insert({ workspace_id: ws.id, user_id: user.id, role: 'owner' });
+        await ensureWorkspaceSubscription(ws.id, { client: admin });
         const store = cookies();
         store.set('active_ws', ws.id, { path: '/' });
         redirect('/settings/workspace');
@@ -688,6 +711,11 @@ async function CreateWorkspaceSection() {
         await supabase
           .from('workspace_members')
           .insert({ workspace_id: ws.id, user_id: user.id, role: 'owner' });
+        try {
+          await ensureWorkspaceSubscription(ws.id);
+        } catch (subscriptionError) {
+          console.warn('[workspace] Failed to ensure subscription for new workspace', subscriptionError);
+        }
         const store = cookies();
         store.set('active_ws', ws.id, { path: '/' });
         redirect('/settings/workspace');

@@ -3,6 +3,8 @@ import { redirect } from 'next/navigation';
 import { cookies } from 'next/headers';
 import { getSupabaseServer } from '@/lib/supabase/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { ensureWorkspaceSubscription, getEntitlementSummary } from '@/lib/billing/subscriptions';
+import { logAuditEvent } from '@/lib/audit';
 import ProjectCard from '@/components/ProjectCard';
 
 type ProjectRow = {
@@ -43,6 +45,7 @@ export default async function DashboardPage() {
   async function createProject(formData: FormData) {
     'use server';
     const supabase = getSupabaseServer();
+    const adminClient = getSupabaseAdmin();
     const { data: userRes } = await supabase.auth.getUser();
     if (!userRes.user) return;
     const name = String(formData.get('name') || 'Neues Projekt');
@@ -60,17 +63,17 @@ export default async function DashboardPage() {
 
     // Auto-provision a default workspace if none exists
     if (!wsId) {
-      const admin = getSupabaseAdmin();
       const fallbackName = userRes.user.email ? `${userRes.user.email}'s Workspace` : 'Mein Workspace';
-      const { data: ws } = await admin
+      const { data: ws } = await adminClient
         .from('workspaces')
         .insert({ name: fallbackName, created_by: userRes.user.id })
         .select('id')
         .single();
       if (ws?.id) {
-        await admin
+        await adminClient
           .from('workspace_members')
           .insert({ workspace_id: ws.id, user_id: userRes.user.id, role: 'owner' });
+        await ensureWorkspaceSubscription(ws.id, { client: adminClient });
         // Set active workspace cookie
         const store = cookies();
         store.set('active_ws', ws.id, { path: '/' });
@@ -82,32 +85,45 @@ export default async function DashboardPage() {
     }
 
     // Enforce Free plan limit: max 3 Projekte ohne aktive Subscription
-    const { data: sub } = await supabase
-      .from('subscriptions')
-      .select('status')
-      .eq('workspace_id', wsId)
-      .maybeSingle();
+    const entitlementSummary = await getEntitlementSummary(wsId, adminClient);
+    const { entitlements } = entitlementSummary;
+
     const { count } = await supabase
       .from('projects')
       .select('id', { count: 'exact', head: true })
       .eq('workspace_id', wsId);
-    const isActive = sub?.status === 'active' || sub?.status === 'trialing';
-    const maxFree = 3;
-    if (!isActive && (count || 0) >= maxFree) {
+    const maxProjects = entitlements.maxProjects;
+    if (maxProjects !== null && (count || 0) >= maxProjects) {
       // Redirect to pricing if limit reached
-      redirect('/pricing?limit=1');
+      redirect('/pricing?limit=projects');
     }
 
-    const { error } = await supabase.from('projects').insert({
-      workspace_id: wsId,
-      name,
-      description,
-      client_name: clientName,
-      share_id: generateShareId(),
-    });
+    const { data: createdProject, error } = await supabase
+      .from('projects')
+      .insert({
+        workspace_id: wsId,
+        name,
+        description,
+        client_name: clientName,
+        share_id: generateShareId(),
+      })
+      .select('id')
+      .single();
     if (error) {
       redirect(`/dashboard?error=${encodeURIComponent(error.message)}`);
     }
+
+    await logAuditEvent({
+      workspaceId: wsId,
+      action: 'projects.created',
+      actorId: userRes.user.id,
+      resourceType: 'project',
+      resourceId: createdProject?.id ?? null,
+      summary: `Projekt ${name || 'Ohne Titel'} erstellt`,
+      metadata: {
+        client_name: clientName,
+      },
+    }, adminClient);
     redirect('/dashboard');
   }
 

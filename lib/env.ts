@@ -10,6 +10,9 @@ const envSchema = z.object({
   STRIPE_WEBHOOK_SECRET: z.string().min(10).optional(),
   FILE_SCAN_WEBHOOK_URL: z.string().url().optional(),
   FILE_SCAN_WEBHOOK_SECRET: z.string().optional(),
+  TRIAL_LENGTH_DAYS: z.string().transform((value) => Number.parseInt(value, 10)).refine((value) => Number.isFinite(value) && value > 0, {
+    message: 'TRIAL_LENGTH_DAYS must be a positive integer',
+  }).optional(),
 });
 
 const _env = envSchema.safeParse(process.env);
@@ -20,6 +23,9 @@ if (!_env.success) {
   if (process.env.NODE_ENV !== "production") {
   }
 }
+
+const rawTrial = process.env.TRIAL_LENGTH_DAYS;
+const parsedTrial = rawTrial ? Number.parseInt(rawTrial, 10) : undefined;
 
 export const env = {
   NEXT_PUBLIC_APP_URL:
@@ -32,4 +38,5 @@ export const env = {
   STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
   FILE_SCAN_WEBHOOK_URL: process.env.FILE_SCAN_WEBHOOK_URL,
   FILE_SCAN_WEBHOOK_SECRET: process.env.FILE_SCAN_WEBHOOK_SECRET,
+  TRIAL_LENGTH_DAYS: parsedTrial && parsedTrial > 0 ? parsedTrial : undefined,
 };

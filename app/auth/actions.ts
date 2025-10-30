@@ -21,28 +21,47 @@ export async function signup(formData: FormData) {
     return;
   }
 
-  // Create workspace and membership using service role
-  const admin = getSupabaseAdmin();
-
-  // Ensure application user row exists
-  await admin.from("users").upsert({ id: user.id, email, full_name: fullName });
-
-  // Create workspace and membership
-  const { data: ws, error: wsError } = await admin
-    .from("workspaces")
-    .insert({
-      name: fullName ? `${fullName}'s Workspace` : `${email}'s Workspace`,
-      created_by: user.id,
-    })
-    .select("id")
-    .single();
-
-  if (!ws || wsError) {
-    // Non-blocking; still let user in
-  } else {
+  // Create workspace and membership using service role; fall back to RLS if unavailable
+  try {
+    const admin = getSupabaseAdmin();
+    // Ensure application user row exists
     await admin
-      .from("workspace_members")
-      .insert({ workspace_id: ws.id, user_id: user.id, role: "owner" });
+      .from("users")
+      .upsert({ id: user.id, email, full_name: fullName });
+
+    // Create workspace and membership
+    const { data: ws } = await admin
+      .from("workspaces")
+      .insert({
+        name: fullName ? `${fullName}'s Workspace` : `${email}'s Workspace`,
+        created_by: user.id,
+      })
+      .select("id")
+      .single();
+
+    if (ws?.id) {
+      await admin
+        .from("workspace_members")
+        .insert({ workspace_id: ws.id, user_id: user.id, role: "owner" });
+    }
+  } catch (_) {
+    // Fallback: use authenticated client with RLS policies
+    await supabase
+      .from("users")
+      .upsert({ id: user.id, email, full_name: fullName });
+    const { data: ws } = await supabase
+      .from("workspaces")
+      .insert({
+        name: fullName ? `${fullName}'s Workspace` : `${email}'s Workspace`,
+        created_by: user.id,
+      })
+      .select("id")
+      .single();
+    if (ws?.id) {
+      await supabase
+        .from("workspace_members")
+        .insert({ workspace_id: ws.id, user_id: user.id, role: "owner" });
+    }
   }
 
   // If email confirmations are enabled, ask user to check inbox

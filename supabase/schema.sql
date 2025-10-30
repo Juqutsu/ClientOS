@@ -21,8 +21,22 @@ create table if not exists public.workspace_members (
   id uuid primary key default gen_random_uuid(),
   workspace_id uuid references public.workspaces(id) on delete cascade,
   user_id uuid references public.users(id) on delete cascade,
-  role text default 'owner'
+  role text default 'owner' check (role in ('owner','admin','member')),
+  created_at timestamp with time zone default now(),
+  unique (workspace_id, user_id)
 );
+
+create table if not exists public.workspace_audit_logs (
+  id uuid primary key default gen_random_uuid(),
+  workspace_id uuid references public.workspaces(id) on delete cascade,
+  action text not null,
+  actor_id uuid references public.users(id),
+  target_id uuid references public.users(id),
+  metadata jsonb default '{}'::jsonb,
+  created_at timestamp with time zone default now()
+);
+
+create index if not exists workspace_audit_logs_workspace_idx on public.workspace_audit_logs (workspace_id, created_at desc);
 
 create table if not exists public.projects (
   id uuid primary key default gen_random_uuid(),
@@ -72,6 +86,16 @@ alter table public.subscriptions enable row level security;
 -- Users: user can view/update their own row
 create policy users_self_select on public.users
   for select using (auth.uid() = id);
+
+create policy users_workspace_select on public.users
+  for select using (exists (
+    select 1 from public.workspace_members wm
+    where wm.user_id = auth.uid()
+      and wm.workspace_id in (
+        select workspace_id from public.workspace_members wm2
+        where wm2.user_id = users.id
+      )
+  ));
 create policy users_self_update on public.users
   for update using (auth.uid() = id);
 
@@ -83,6 +107,12 @@ create policy users_self_insert on public.users
 create policy wm_self_select on public.workspace_members
   for select using (auth.uid() = user_id);
 
+create policy wm_workspace_select on public.workspace_members
+  for select using (exists (
+    select 1 from public.workspace_members wm
+    where wm.workspace_id = workspace_members.workspace_id and wm.user_id = auth.uid()
+  ));
+
 -- Workspace members: allow creator to add themselves as owner for newly created workspace
 create policy wm_creator_self_insert on public.workspace_members
   for insert with check (
@@ -91,6 +121,23 @@ create policy wm_creator_self_insert on public.workspace_members
       where w.id = workspace_members.workspace_id and w.created_by = auth.uid()
     )
   );
+
+create policy wm_admin_update on public.workspace_members
+  for update using (exists (
+    select 1 from public.workspace_members wm
+    where wm.workspace_id = workspace_members.workspace_id
+      and wm.user_id = auth.uid()
+      and wm.role in ('owner','admin')
+  ))
+  with check (role in ('owner','admin','member'));
+
+create policy wm_admin_delete on public.workspace_members
+  for delete using (exists (
+    select 1 from public.workspace_members wm
+    where wm.workspace_id = workspace_members.workspace_id
+      and wm.user_id = auth.uid()
+      and wm.role in ('owner','admin')
+  ));
 
 -- Workspaces: members can select
 create policy ws_members_select on public.workspaces
@@ -146,6 +193,23 @@ create policy subs_members_select on public.subscriptions
   for select using (exists (
     select 1 from public.workspace_members wm
     where wm.workspace_id = subscriptions.workspace_id and wm.user_id = auth.uid()
+  ));
+
+alter table public.workspace_audit_logs enable row level security;
+
+create policy wal_members_select on public.workspace_audit_logs
+  for select using (exists (
+    select 1 from public.workspace_members wm
+    where wm.workspace_id = workspace_audit_logs.workspace_id
+      and wm.user_id = auth.uid()
+  ));
+
+create policy wal_admin_insert on public.workspace_audit_logs
+  for insert with check (exists (
+    select 1 from public.workspace_members wm
+    where wm.workspace_id = workspace_audit_logs.workspace_id
+      and wm.user_id = auth.uid()
+      and wm.role in ('owner','admin')
   ));
 
 -- Storage: create public bucket for project files

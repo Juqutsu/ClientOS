@@ -33,7 +33,11 @@ export function middleware(req: NextRequest) {
     if (/^sb-[A-Za-z0-9]+-auth-token(\.\d+)?$/.test(name)) return true;
 
     // Back-compat
-    if (name === "supabase.auth.token" || /^supabase\.auth\.token(\.\d+)?$/.test(name)) return true;
+    if (
+      name === "supabase.auth.token" ||
+      /^supabase\.auth\.token(\.\d+)?$/.test(name)
+    )
+      return true;
     return false;
   });
 

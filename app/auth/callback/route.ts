@@ -3,7 +3,8 @@ import { getSupabaseServer } from '@/lib/supabase/server';
 
 export async function GET(req: Request) {
   const url = new URL(req.url);
-  const next = url.searchParams.get('next');
+  const nextRaw = url.searchParams.get('next');
+  const next = nextRaw && nextRaw.startsWith('/') ? nextRaw : null;
   const supabase = getSupabaseServer();
 
   try {

@@ -12,9 +12,18 @@ export function getSupabaseServer() {
           return cookieStore.getAll();
         },
         setAll(cookies) {
-          cookies.forEach(({ name, value, options }) => {
-            cookieStore.set({ name, value, ...options });
-          });
+          // In Next.js, cookies().set is only allowed in Route Handlers and Server Actions.
+          // When this helper is used from a Server Component (e.g. layout/page) we must
+          // no-op on writes to avoid runtime errors. Supabase will still be able to read
+          // the session; any auth flows that need to write cookies should be done via
+          // a Server Action or Route Handler.
+          try {
+            cookies.forEach(({ name, value, options }) => {
+              cookieStore.set({ name, value, ...options });
+            });
+          } catch {
+            // ignore write attempts outside of a mutable cookies context
+          }
         },
       },
     }

@@ -37,44 +37,11 @@ export function middleware(req: NextRequest) {
     return false;
   });
 
-  // Lightweight logging for auth flow diagnostics
-  try {
-    console.log(
-      JSON.stringify(
-        {
-          tag: "middleware/auth-check",
-          path: pathname,
-          hasSupabaseSession,
-          cookies: cookieNames,
-        },
-        null,
-        0
-      )
-    );
-  } catch (_) {
-    // ignore logging failures
-  }
-
   if (!hasSupabaseSession) {
     const url = req.nextUrl.clone();
     url.pathname = "/auth/login";
     const original = pathname + (req.nextUrl.search || "");
     url.searchParams.set("next", original);
-
-    try {
-      console.log(
-        JSON.stringify(
-          {
-            tag: "middleware/redirect-login",
-            from: pathname,
-            to: url.pathname,
-            next: original,
-          },
-          null,
-          0
-        )
-      );
-    } catch (_) {}
 
     return NextResponse.redirect(url);
   }

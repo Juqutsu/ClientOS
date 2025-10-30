@@ -27,9 +27,6 @@ export default async function AuthPage({
   const { data } = await supabase.auth.getUser();
   if (data.user) {
     const dest = next && next.startsWith("/") ? next : "/dashboard";
-    try {
-      console.log(JSON.stringify({ tag: "auth/login/already-authenticated", dest }, null, 0));
-    } catch {}
     redirect(dest);
   }
 

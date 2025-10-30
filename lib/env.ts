@@ -16,7 +16,6 @@ if (!_env.success) {
   // Collect missing or invalid keys; do not throw in production here to avoid breaking build,
   // but log for visibility. Critical keys should be handled where used.
   if (process.env.NODE_ENV !== 'production') {
-    console.warn('Invalid environment variables:', _env.error.flatten().fieldErrors);
   }
 }
 

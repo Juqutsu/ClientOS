@@ -20,12 +20,20 @@ export function middleware(req: NextRequest) {
 
   // Detect Supabase auth cookies set by @supabase/ssr (be liberal in what we accept)
   const hasSupabaseSession = cookieNames.some((name) => {
-    // New helpers
+    // Standard helpers cookies
     if (name === "sb-access-token" || name === "sb-refresh-token") return true;
-    // Some setups prefix cookies with project ref, e.g. sb-xxxx-access-token
-    if (name.startsWith("sb-") && (name.endsWith("-access-token") || name.endsWith("-refresh-token"))) return true;
-    // Back-compat for older cookie names
-    if (name === "supabase.auth.token" || name.startsWith("supabase.auth.token.")) return true;
+
+    // Project-ref prefixed cookies used by various @supabase/ssr versions
+    // Examples:
+    //   sb-<ref>-access-token
+    //   sb-<ref>-refresh-token
+    //   sb-<ref>-auth-token
+    //   sb-<ref>-auth-token.0 / sb-<ref>-auth-token.1
+    if (/^sb-[A-Za-z0-9]+-(access|refresh)-token$/.test(name)) return true;
+    if (/^sb-[A-Za-z0-9]+-auth-token(\.\d+)?$/.test(name)) return true;
+
+    // Back-compat
+    if (name === "supabase.auth.token" || /^supabase\.auth\.token(\.\d+)?$/.test(name)) return true;
     return false;
   });
 

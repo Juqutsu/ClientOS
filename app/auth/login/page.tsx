@@ -6,18 +6,32 @@ import {
   sendPasswordReset,
 } from "@/app/auth/actions";
 import AuthToasts from "@/components/AuthToasts";
+import { getSupabaseServer } from "@/lib/supabase/server";
+import { redirect } from "next/navigation";
 
-export default function AuthPage({
+export default async function AuthPage({
   searchParams,
 }: {
   searchParams?: Record<string, string | string[] | undefined>;
 }) {
+  // If already authenticated, don't show login. Redirect to next or dashboard.
+  const supabase = getSupabaseServer();
+
   const error =
     typeof searchParams?.error === "string" ? searchParams?.error : "";
   const success =
     typeof searchParams?.success === "string" ? searchParams?.success : "";
   const next =
     typeof searchParams?.next === "string" ? (searchParams.next as string) : "";
+
+  const { data } = await supabase.auth.getUser();
+  if (data.user) {
+    const dest = next && next.startsWith("/") ? next : "/dashboard";
+    try {
+      console.log(JSON.stringify({ tag: "auth/login/already-authenticated", dest }, null, 0));
+    } catch {}
+    redirect(dest);
+  }
 
   return (
     <main className="min-h-screen grid place-items-center bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50 p-4">

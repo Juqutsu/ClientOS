@@ -38,21 +38,43 @@ export default async function WorkspaceSettingsPage() {
   }
 
   return (
-    <main className="p-6 space-y-4">
-      <h1 className="text-2xl font-semibold">Workspace</h1>
-      {ws ? (
-        <form action={updateWorkspace} className="space-y-3 max-w-md">
-          <input type="hidden" name="workspace_id" value={ws.id} />
-          <div>
-            <label className="block text-sm font-medium">Name</label>
-            <input name="name" defaultValue={ws.name || ''} className="mt-1 w-full rounded-md border px-3 py-2" />
+    <main className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 p-6">
+      <div className="max-w-3xl mx-auto space-y-6">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-primary-900 bg-clip-text text-transparent">Workspace</h1>
+          <p className="text-gray-600 mt-2">Verwalte deine Workspace-Einstellungen und Mitglieder</p>
+        </div>
+
+        {ws ? (
+          <div className="card-gradient p-8">
+            <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
+              <svg className="w-6 h-6 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+              </svg>
+              Workspace-Einstellungen
+            </h2>
+            <form action={updateWorkspace} className="space-y-4">
+              <input type="hidden" name="workspace_id" value={ws.id} />
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Workspace-Name</label>
+                <input name="name" defaultValue={ws.name || ''} placeholder="Mein Workspace" className="input-field" />
+                <p className="text-xs text-gray-500 mt-1">Der Name deines Workspaces, sichtbar für alle Mitglieder</p>
+              </div>
+              <button type="submit" className="btn-primary">Änderungen speichern</button>
+            </form>
           </div>
-          <button type="submit" className="px-4 py-2 rounded-md bg-black text-white">Speichern</button>
-        </form>
-      ) : (
-        <p className="text-gray-600">Kein Workspace gefunden.</p>
-      )}
-      {ws ? <InviteSection workspaceId={ws.id} /> : null}
+        ) : (
+          <div className="card-gradient p-12 text-center">
+            <div className="w-16 h-16 bg-red-100 rounded-full mx-auto flex items-center justify-center mb-4">
+              <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+            <p className="text-xl font-semibold text-gray-700">Kein Workspace gefunden.</p>
+          </div>
+        )}
+        {ws ? <InviteSection workspaceId={ws.id} /> : null}
+      </div>
     </main>
   );
 }
@@ -97,23 +119,42 @@ async function InviteSection({ workspaceId }: { workspaceId: string }): Promise<
   }
 
   return (
-    <section className="mt-8 max-w-md">
-      <h2 className="font-semibold mb-2">Mitglieder einladen</h2>
-      <form action={inviteMember} className="space-y-3">
+    <div className="card-gradient p-8">
+      <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
+        <svg className="w-6 h-6 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+        </svg>
+        Mitglieder einladen
+      </h2>
+      <form action={inviteMember} className="space-y-4">
         <input type="hidden" name="workspace_id" value={workspaceId} />
         <div>
-          <label className="block text-sm font-medium">E-Mail</label>
-          <input name="email" type="email" required className="mt-1 w-full rounded-md border px-3 py-2" />
+          <label className="block text-sm font-semibold text-gray-700 mb-2">E-Mail-Adresse</label>
+          <input 
+            name="email" 
+            type="email" 
+            required 
+            placeholder="kollege@beispiel.de" 
+            className="input-field" 
+          />
+          <p className="text-xs text-gray-500 mt-1">Eine Einladungs-E-Mail wird an diese Adresse gesendet</p>
         </div>
         <div>
-          <label className="block text-sm font-medium">Rolle</label>
-          <select name="role" className="mt-1 w-full border rounded-md px-3 py-2" defaultValue="member">
-            <option value="member">Member</option>
-            <option value="admin">Admin</option>
+          <label className="block text-sm font-semibold text-gray-700 mb-2">Rolle</label>
+          <select name="role" className="input-field" defaultValue="member">
+            <option value="member">Member - Kann Projekte ansehen und bearbeiten</option>
+            <option value="admin">Admin - Kann Mitglieder verwalten</option>
           </select>
         </div>
-        <button type="submit" className="px-4 py-2 rounded-md border bg-white hover:bg-gray-50">Einladung senden</button>
+        <button type="submit" className="btn-secondary w-full">
+          <span className="flex items-center justify-center gap-2">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 19v-8.93a2 2 0 01.89-1.664l7-4.666a2 2 0 012.22 0l7 4.666A2 2 0 0121 10.07V19M3 19a2 2 0 002 2h14a2 2 0 002-2M3 19l6.75-4.5M21 19l-6.75-4.5M3 10l6.75 4.5M21 10l-6.75 4.5m0 0l-1.14.76a2 2 0 01-2.22 0l-1.14-.76" />
+            </svg>
+            Einladung senden
+          </span>
+        </button>
       </form>
-    </section>
+    </div>
   );
 }

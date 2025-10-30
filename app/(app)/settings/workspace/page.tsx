@@ -172,18 +172,37 @@ async function CreateWorkspaceSection(): Promise<React.ReactElement | null> {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) return;
-    const admin = getSupabaseAdmin();
     const fallbackName = user.email ? `${user.email}'s Workspace` : 'Neuer Workspace';
-    const { data: ws } = await admin
-      .from('workspaces')
-      .insert({ name: name || fallbackName, created_by: user.id })
-      .select('id')
-      .single();
-    if (ws?.id) {
-      await admin.from('workspace_members').insert({ workspace_id: ws.id, user_id: user.id, role: 'owner' });
-      const store = cookies();
-      store.set('active_ws', ws.id, { path: '/' });
-      redirect('/settings/workspace');
+    try {
+      const admin = getSupabaseAdmin();
+      const { data: ws } = await admin
+        .from('workspaces')
+        .insert({ name: name || fallbackName, created_by: user.id })
+        .select('id')
+        .single();
+      if (ws?.id) {
+        await admin
+          .from('workspace_members')
+          .insert({ workspace_id: ws.id, user_id: user.id, role: 'owner' });
+        const store = cookies();
+        store.set('active_ws', ws.id, { path: '/' });
+        redirect('/settings/workspace');
+      }
+    } catch (_) {
+      // Fallback: use RLS-enabled inserts via authenticated client
+      const { data: ws } = await supabase
+        .from('workspaces')
+        .insert({ name: name || fallbackName, created_by: user.id })
+        .select('id')
+        .single();
+      if (ws?.id) {
+        await supabase
+          .from('workspace_members')
+          .insert({ workspace_id: ws.id, user_id: user.id, role: 'owner' });
+        const store = cookies();
+        store.set('active_ws', ws.id, { path: '/' });
+        redirect('/settings/workspace');
+      }
     }
   }
 

@@ -75,15 +75,42 @@ create policy users_self_select on public.users
 create policy users_self_update on public.users
   for update using (auth.uid() = id);
 
+-- Users: allow a user to insert their own row
+create policy users_self_insert on public.users
+  for insert with check (auth.uid() = id);
+
 -- Workspace members: user can see own memberships
 create policy wm_self_select on public.workspace_members
   for select using (auth.uid() = user_id);
+
+-- Workspace members: allow creator to add themselves as owner for newly created workspace
+create policy wm_creator_self_insert on public.workspace_members
+  for insert with check (
+    user_id = auth.uid() and exists (
+      select 1 from public.workspaces w
+      where w.id = workspace_members.workspace_id and w.created_by = auth.uid()
+    )
+  );
 
 -- Workspaces: members can select
 create policy ws_members_select on public.workspaces
   for select using (exists (
     select 1 from public.workspace_members wm
     where wm.workspace_id = workspaces.id and wm.user_id = auth.uid()
+  ));
+
+-- Workspaces: allow insert by the creator (self)
+create policy ws_self_insert on public.workspaces
+  for insert with check (created_by = auth.uid());
+
+-- Workspaces: allow update by owners/admins
+create policy ws_admins_update on public.workspaces
+  for update using (exists (
+    select 1 from public.workspace_members wm
+    where wm.workspace_id = workspaces.id and wm.user_id = auth.uid() and wm.role in ('owner','admin')
+  )) with check (exists (
+    select 1 from public.workspace_members wm
+    where wm.workspace_id = workspaces.id and wm.user_id = auth.uid() and wm.role in ('owner','admin')
   ));
 
 -- Projects: members can select/insert/update/delete

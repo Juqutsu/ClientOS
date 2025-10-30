@@ -145,23 +145,27 @@ export default async function WorkspaceSettingsPage() {
     return <NoWorkspaceState />;
   }
 
-  const { data: members = [] } = await supabase
+  const { data: membersData } = await supabase
     .from('workspace_members')
     .select('id, role, created_at, user:users(id, email, full_name)')
     .eq('workspace_id', workspace.id)
-    .order('created_at', { ascending: true }) as unknown as { data: WorkspaceMember[] };
+    .order('created_at', { ascending: true }) as unknown as { data: WorkspaceMember[] | null };
+
+  const members: WorkspaceMember[] = membersData ?? [];
 
   const currentMember = members.find((m) => m.user?.id === user.id);
   const currentRole = currentMember?.role;
   const canManageMembers = currentRole === 'owner' || currentRole === 'admin';
   const canManageWorkspace = currentRole === 'owner' || currentRole === 'admin';
 
-  const { data: auditLogs = [] } = await supabase
+  const { data: auditLogData } = await supabase
     .from('workspace_audit_logs')
     .select('id, action, actor:users!workspace_audit_logs_actor_id_fkey(id, email, full_name), target:users!workspace_audit_logs_target_id_fkey(id, email, full_name), metadata, created_at')
     .eq('workspace_id', workspace.id)
     .order('created_at', { ascending: false })
-    .limit(25) as unknown as { data: AuditLogEntry[] };
+    .limit(25) as unknown as { data: AuditLogEntry[] | null };
+
+  const auditLogs: AuditLogEntry[] = auditLogData ?? [];
 
   async function updateWorkspace(formData: FormData) {
     'use server';

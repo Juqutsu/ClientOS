@@ -8,6 +8,8 @@ const envSchema = z.object({
   STRIPE_SECRET_KEY: z.string().min(10).optional(),
   STRIPE_PRICE_ID: z.string().min(1).optional(),
   STRIPE_WEBHOOK_SECRET: z.string().min(10).optional(),
+  FILE_SCAN_WEBHOOK_URL: z.string().url().optional(),
+  FILE_SCAN_WEBHOOK_SECRET: z.string().optional(),
 });
 
 const _env = envSchema.safeParse(process.env);
@@ -28,4 +30,6 @@ export const env = {
   STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
   STRIPE_PRICE_ID: process.env.STRIPE_PRICE_ID,
   STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
+  FILE_SCAN_WEBHOOK_URL: process.env.FILE_SCAN_WEBHOOK_URL,
+  FILE_SCAN_WEBHOOK_SECRET: process.env.FILE_SCAN_WEBHOOK_SECRET,
 };

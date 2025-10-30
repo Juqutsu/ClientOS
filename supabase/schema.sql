@@ -1,5 +1,5 @@
--- Enable required extension for UUID generation
 create extension if not exists pgcrypto;
+create extension if not exists pg_trgm;
 
 -- Users table mirrors auth.users (subset for profile fields)
 create table if not exists public.users (
@@ -53,6 +53,10 @@ create table if not exists public.tasks (
   project_id uuid references public.projects(id) on delete cascade,
   title text,
   status text default 'todo',
+  description text,
+  notes text,
+  due_date date,
+  updated_at timestamp with time zone default now(),
   created_at timestamp with time zone default now()
 );
 
@@ -62,6 +66,14 @@ create table if not exists public.files (
   file_url text,
   file_name text,
   uploaded_by uuid references public.users(id),
+  file_size bigint,
+  mime_type text,
+  scan_status text default 'pending' check (scan_status in ('pending','scanning','clean','flagged','failed')),
+  scan_reference text,
+  folder text,
+  tags text[] default '{}',
+  preview_url text,
+  updated_at timestamp with time zone default now(),
   created_at timestamp with time zone default now()
 );
 
@@ -211,6 +223,19 @@ create policy wal_admin_insert on public.workspace_audit_logs
       and wm.user_id = auth.uid()
       and wm.role in ('owner','admin')
   ));
+
+-- Tasks indexes for filtering/searching
+create index if not exists tasks_project_status_idx on public.tasks (project_id, status);
+create index if not exists tasks_project_due_idx on public.tasks (project_id, due_date);
+create index if not exists tasks_project_created_idx on public.tasks (project_id, created_at desc);
+create index if not exists tasks_search_idx on public.tasks using gin (
+  to_tsvector('simple', coalesce(title, '') || ' ' || coalesce(description, '') || ' ' || coalesce(notes, ''))
+);
+
+-- Files indexes for filtering/searching
+create index if not exists files_project_folder_idx on public.files (project_id, folder);
+create index if not exists files_project_created_idx on public.files (project_id, created_at desc);
+create index if not exists files_tags_idx on public.files using gin (tags);
 
 -- Storage: create public bucket for project files
 -- Note: This requires "Supabase Storage" SQL helpers to be available in your project

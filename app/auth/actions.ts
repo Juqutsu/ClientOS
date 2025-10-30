@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { getSupabaseServer } from "@/lib/supabase/server";
+import { headers } from "next/headers";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export async function signup(formData: FormData) {
@@ -71,9 +72,9 @@ export async function logout() {
 
 export async function oauth(provider: "google" | "github", next?: string) {
   const supabase = getSupabaseServer();
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const appOrigin = headers().get("origin") || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
   const safeNext = next && next.startsWith("/") ? next : undefined;
-  const redirectTo = `${appUrl}/auth/callback${
+  const redirectTo = `${appOrigin}/auth/callback${
     safeNext ? `?next=${encodeURIComponent(safeNext)}` : ""
   }`;
   const { data, error } = await supabase.auth.signInWithOAuth({
@@ -95,8 +96,8 @@ export async function magicLink(formData: FormData) {
   const next = nextRaw && nextRaw.startsWith("/") ? nextRaw : "";
   if (!email) redirect("/auth/login?error=E-Mail%20erforderlich");
   const supabase = getSupabaseServer();
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-  const emailRedirectTo = `${appUrl}/auth/callback${
+  const appOrigin = headers().get("origin") || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const emailRedirectTo = `${appOrigin}/auth/callback${
     next ? `?next=${encodeURIComponent(next)}` : ""
   }`;
   const { error } = await supabase.auth.signInWithOtp({
@@ -113,9 +114,9 @@ export async function sendPasswordReset(formData: FormData) {
   const email = String(formData.get("email") || "").trim();
   if (!email) redirect("/auth/login?error=E-Mail%20erforderlich");
   const supabase = getSupabaseServer();
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const appOrigin = headers().get("origin") || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${appUrl}/auth/callback?next=/auth/reset`,
+    redirectTo: `${appOrigin}/auth/callback?next=/auth/reset`,
   });
   if (error) {
     redirect(`/auth/login?error=${encodeURIComponent(error.message)}`);

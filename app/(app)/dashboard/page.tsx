@@ -2,6 +2,7 @@ import { requireUser } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { cookies } from 'next/headers';
 import { getSupabaseServer } from '@/lib/supabase/server';
+import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import ProjectCard from '@/components/ProjectCard';
 
 type ProjectRow = {
@@ -55,8 +56,30 @@ export default async function DashboardPage() {
       .eq('user_id', userRes.user.id)
       .limit(1)
       .maybeSingle();
-    const wsId = mem?.workspace_id;
-    if (!wsId) return;
+    let wsId = mem?.workspace_id as string | null;
+
+    // Auto-provision a default workspace if none exists
+    if (!wsId) {
+      const admin = getSupabaseAdmin();
+      const fallbackName = userRes.user.email ? `${userRes.user.email}'s Workspace` : 'Mein Workspace';
+      const { data: ws } = await admin
+        .from('workspaces')
+        .insert({ name: fallbackName, created_by: userRes.user.id })
+        .select('id')
+        .single();
+      if (ws?.id) {
+        await admin
+          .from('workspace_members')
+          .insert({ workspace_id: ws.id, user_id: userRes.user.id, role: 'owner' });
+        // Set active workspace cookie
+        const store = cookies();
+        store.set('active_ws', ws.id, { path: '/' });
+        wsId = ws.id;
+      } else {
+        // If provisioning failed, send user to workspace settings to create one
+        redirect('/settings/workspace');
+      }
+    }
 
     // Enforce Free plan limit: max 3 Projekte ohne aktive Subscription
     const { data: sub } = await supabase
@@ -75,13 +98,17 @@ export default async function DashboardPage() {
       redirect('/pricing?limit=1');
     }
 
-    await supabase.from('projects').insert({
+    const { error } = await supabase.from('projects').insert({
       workspace_id: wsId,
       name,
       description,
       client_name: clientName,
       share_id: generateShareId(),
     });
+    if (error) {
+      redirect(`/dashboard?error=${encodeURIComponent(error.message)}`);
+    }
+    redirect('/dashboard');
   }
 
   return (

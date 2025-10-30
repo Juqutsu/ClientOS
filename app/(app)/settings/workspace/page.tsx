@@ -1,8 +1,8 @@
 import { requireUser } from '@/lib/auth';
 import { getSupabaseServer } from '@/lib/supabase/server';
 import { cookies } from 'next/headers';
-import { createClient } from '@supabase/supabase-js';
 import { redirect } from 'next/navigation';
+import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import type React from 'react';
 
 export default async function WorkspaceSettingsPage() {
@@ -113,11 +113,7 @@ async function InviteSection({ workspaceId }: { workspaceId: string }): Promise<
   }
 
   function createAdmin() {
-    return createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      { auth: { autoRefreshToken: false, persistSession: false } }
-    );
+    return getSupabaseAdmin();
   }
 
   return (
@@ -176,11 +172,7 @@ async function CreateWorkspaceSection(): Promise<React.ReactElement | null> {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) return;
-    const admin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      { auth: { autoRefreshToken: false, persistSession: false } }
-    );
+    const admin = getSupabaseAdmin();
     const fallbackName = user.email ? `${user.email}'s Workspace` : 'Neuer Workspace';
     const { data: ws } = await admin
       .from('workspaces')

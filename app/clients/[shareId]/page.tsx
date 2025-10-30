@@ -1,17 +1,9 @@
-import { createClient } from '@supabase/supabase-js';
-
-function getAdmin() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  );
-}
+import { getSupabaseAdmin } from '@/lib/supabase/admin';
 
 export const revalidate = 60;
 
 export default async function ClientSharePage({ params }: { params: { shareId: string } }) {
-  const admin = getAdmin();
+  const admin = getSupabaseAdmin();
   const { data: project } = await admin
     .from('projects')
     .select('id, name, description, client_name')

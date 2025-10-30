@@ -1,7 +1,7 @@
 import { requireUser } from '@/lib/auth';
 import { getSupabaseServer } from '@/lib/supabase/server';
 import AvatarUpload from '@/components/AvatarUpload';
-import { createClient } from '@supabase/supabase-js';
+import { getSupabaseAdmin } from '@/lib/supabase/admin';
 
 export default async function ProfilePage() {
   const user = await requireUser();
@@ -104,11 +104,7 @@ async function deleteAccount() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return;
-  const admin = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  );
+  const admin = getSupabaseAdmin();
   // Avoid FK constraint on workspaces.created_by
   await admin.from('workspaces').update({ created_by: null }).eq('created_by', user.id);
   await admin.from('users').delete().eq('id', user.id);

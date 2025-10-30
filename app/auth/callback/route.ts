@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseServer } from "@/lib/supabase/server";
-import { createClient } from "@supabase/supabase-js";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export async function GET(req: Request) {
   const url = new URL(req.url);
@@ -34,11 +34,7 @@ export async function GET(req: Request) {
 
     try {
       if (user) {
-        const admin = createClient(
-          process.env.NEXT_PUBLIC_SUPABASE_URL!,
-          process.env.SUPABASE_SERVICE_ROLE_KEY!,
-          { auth: { autoRefreshToken: false, persistSession: false } }
-        );
+        const admin = getSupabaseAdmin();
 
         // Ensure application user row exists
         await admin

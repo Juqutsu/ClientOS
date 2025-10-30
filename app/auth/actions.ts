@@ -1,19 +1,8 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { createClient } from "@supabase/supabase-js";
 import { getSupabaseServer } from "@/lib/supabase/server";
-
-function getAdminClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-  return createClient(url, serviceKey, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
-  });
-}
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export async function signup(formData: FormData) {
   const email = String(formData.get("email") || "").trim();
@@ -32,7 +21,7 @@ export async function signup(formData: FormData) {
   }
 
   // Create workspace and membership using service role
-  const admin = getAdminClient();
+  const admin = getSupabaseAdmin();
 
   // Ensure application user row exists
   await admin.from("users").upsert({ id: user.id, email, full_name: fullName });

@@ -68,7 +68,7 @@ export default async function DashboardPage() {
       .from('projects')
       .select('id', { count: 'exact', head: true })
       .eq('workspace_id', wsId);
-    const isActive = sub?.status === 'active';
+    const isActive = sub?.status === 'active' || sub?.status === 'trialing';
     const maxFree = 3;
     if (!isActive && (count || 0) >= maxFree) {
       // Redirect to pricing if limit reached

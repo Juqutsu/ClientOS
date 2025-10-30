@@ -2,6 +2,7 @@ import { requireUser } from '@/lib/auth';
 import { getSupabaseServer } from '@/lib/supabase/server';
 import { cookies } from 'next/headers';
 import { createClient } from '@supabase/supabase-js';
+import { redirect } from 'next/navigation';
 import type React from 'react';
 
 export default async function WorkspaceSettingsPage() {
@@ -74,6 +75,7 @@ export default async function WorkspaceSettingsPage() {
           </div>
         )}
         {ws ? <InviteSection workspaceId={ws.id} /> : null}
+        <CreateWorkspaceSection />
       </div>
     </main>
   );
@@ -154,6 +156,60 @@ async function InviteSection({ workspaceId }: { workspaceId: string }): Promise<
             Einladung senden
           </span>
         </button>
+      </form>
+    </div>
+  );
+}
+
+async function CreateWorkspaceSection(): Promise<React.ReactElement | null> {
+  const supabase = getSupabaseServer();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  async function createWorkspace(formData: FormData) {
+    'use server';
+    const name = String(formData.get('name') || '').trim();
+    const supabase = getSupabaseServer();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return;
+    const admin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      { auth: { autoRefreshToken: false, persistSession: false } }
+    );
+    const fallbackName = user.email ? `${user.email}'s Workspace` : 'Neuer Workspace';
+    const { data: ws } = await admin
+      .from('workspaces')
+      .insert({ name: name || fallbackName, created_by: user.id })
+      .select('id')
+      .single();
+    if (ws?.id) {
+      await admin.from('workspace_members').insert({ workspace_id: ws.id, user_id: user.id, role: 'owner' });
+      const store = cookies();
+      store.set('active_ws', ws.id, { path: '/' });
+      redirect('/settings/workspace');
+    }
+  }
+
+  return (
+    <div className="card-gradient p-8">
+      <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
+        <svg className="w-6 h-6 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+        </svg>
+        Neuen Workspace erstellen
+      </h2>
+      <form action={createWorkspace} className="space-y-4">
+        <div>
+          <label className="block text-sm font-semibold text-gray-700 mb-2">Workspace-Name</label>
+          <input name="name" placeholder="z.B. Agentur Müller" className="input-field" />
+          <p className="text-xs text-gray-500 mt-1">Wird automatisch als aktiv gesetzt</p>
+        </div>
+        <button type="submit" className="btn-secondary">Workspace anlegen</button>
       </form>
     </div>
   );

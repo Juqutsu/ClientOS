@@ -45,7 +45,12 @@ export default async function DashboardPage() {
   async function createProject(formData: FormData) {
     'use server';
     const supabase = getSupabaseServer();
-    const adminClient = getSupabaseAdmin();
+    let adminClient: ReturnType<typeof getSupabaseAdmin> | null = null;
+    try {
+      adminClient = getSupabaseAdmin();
+    } catch (error) {
+      console.warn('[dashboard] Admin client unavailable during project creation', error);
+    }
     const { data: userRes } = await supabase.auth.getUser();
     if (!userRes.user) return;
     const name = String(formData.get('name') || 'Neues Projekt');
@@ -64,35 +69,72 @@ export default async function DashboardPage() {
     // Auto-provision a default workspace if none exists
     if (!wsId) {
       const fallbackName = userRes.user.email ? `${userRes.user.email}'s Workspace` : 'Mein Workspace';
-      const { data: ws } = await adminClient
-        .from('workspaces')
-        .insert({ name: fallbackName, created_by: userRes.user.id })
-        .select('id')
-        .single();
-      if (ws?.id) {
-        await adminClient
-          .from('workspace_members')
-          .insert({ workspace_id: ws.id, user_id: userRes.user.id, role: 'owner' });
-        await ensureWorkspaceSubscription(ws.id, { client: adminClient });
-        // Set active workspace cookie
-        const store = cookies();
-        store.set('active_ws', ws.id, { path: '/' });
-        wsId = ws.id;
+
+      if (adminClient) {
+        const { data: ws, error: workspaceError } = await adminClient
+          .from('workspaces')
+          .insert({ name: fallbackName, created_by: userRes.user.id })
+          .select('id')
+          .single();
+
+        if (workspaceError) {
+          console.error('[dashboard] Failed to auto-provision workspace with admin client', workspaceError);
+        }
+
+        if (ws?.id) {
+          await adminClient
+            .from('workspace_members')
+            .insert({ workspace_id: ws.id, user_id: userRes.user.id, role: 'owner' });
+          try {
+            await ensureWorkspaceSubscription(ws.id, { client: adminClient });
+          } catch (subscriptionError) {
+            console.warn('[dashboard] Failed to ensure subscription for workspace', subscriptionError);
+          }
+          const store = cookies();
+          store.set('active_ws', ws.id, { path: '/' });
+          wsId = ws.id;
+        }
       } else {
-        // If provisioning failed, send user to workspace settings to create one
+        const { data: ws, error: workspaceError } = await supabase
+          .from('workspaces')
+          .insert({ name: fallbackName, created_by: userRes.user.id })
+          .select('id')
+          .single();
+
+        if (workspaceError) {
+          console.error('[dashboard] Failed to auto-provision workspace via RLS client', workspaceError);
+        }
+
+        if (ws?.id) {
+          await supabase
+            .from('workspace_members')
+            .insert({ workspace_id: ws.id, user_id: userRes.user.id, role: 'owner' });
+          const store = cookies();
+          store.set('active_ws', ws.id, { path: '/' });
+          wsId = ws.id;
+        }
+      }
+
+      if (!wsId) {
         redirect('/settings/workspace');
       }
     }
 
     // Enforce Free plan limit: max 3 Projekte ohne aktive Subscription
-    const entitlementSummary = await getEntitlementSummary(wsId, adminClient);
-    const { entitlements } = entitlementSummary;
+    let maxProjects: number | null = null;
+    if (wsId && adminClient) {
+      try {
+        const entitlementSummary = await getEntitlementSummary(wsId, adminClient);
+        maxProjects = entitlementSummary.entitlements.maxProjects;
+      } catch (entitlementsError) {
+        console.warn('[dashboard] Failed to fetch entitlements for workspace', entitlementsError);
+      }
+    }
 
     const { count } = await supabase
       .from('projects')
       .select('id', { count: 'exact', head: true })
       .eq('workspace_id', wsId);
-    const maxProjects = entitlements.maxProjects;
     if (maxProjects !== null && (count || 0) >= maxProjects) {
       // Redirect to pricing if limit reached
       redirect('/pricing?limit=projects');
@@ -113,17 +155,19 @@ export default async function DashboardPage() {
       redirect(`/dashboard?error=${encodeURIComponent(error.message)}`);
     }
 
-    await logAuditEvent({
-      workspaceId: wsId,
-      action: 'projects.created',
-      actorId: userRes.user.id,
-      resourceType: 'project',
-      resourceId: createdProject?.id ?? null,
-      summary: `Projekt ${name || 'Ohne Titel'} erstellt`,
-      metadata: {
-        client_name: clientName,
-      },
-    }, adminClient);
+    if (adminClient) {
+      await logAuditEvent({
+        workspaceId: wsId,
+        action: 'projects.created',
+        actorId: userRes.user.id,
+        resourceType: 'project',
+        resourceId: createdProject?.id ?? null,
+        summary: `Projekt ${name || 'Ohne Titel'} erstellt`,
+        metadata: {
+          client_name: clientName,
+        },
+      }, adminClient);
+    }
     redirect('/dashboard');
   }
 

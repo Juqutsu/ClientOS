@@ -31,7 +31,18 @@ export default async function AuthPage({
   }
 
   return (
-    <main className="min-h-screen grid place-items-center bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50 p-4">
+    <main className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50">
+      <header className="border-b bg-white/80 backdrop-blur-md sticky top-0 z-50">
+        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+          <a href="/" className="font-bold text-lg bg-gradient-to-r from-primary-600 to-accent-600 bg-clip-text text-transparent">
+            Client Portal
+          </a>
+          <nav className="text-sm">
+            <a href="/" className="text-gray-700 hover:text-primary-700">Zur Startseite</a>
+          </nav>
+        </div>
+      </header>
+      <div className="grid place-items-center p-4">
       <AuthToasts error={error} success={success} />
       <div className="w-full max-w-6xl grid grid-cols-1 md:grid-cols-2 gap-8">
         <div className="card-gradient p-8 space-y-6">
@@ -242,6 +253,7 @@ export default async function AuthPage({
             Mit der Registrierung akzeptierst du unsere Nutzungsbedingungen
           </p>
         </div>
+      </div>
       </div>
     </main>
   );

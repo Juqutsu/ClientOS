@@ -8,6 +8,8 @@ function getAdmin() {
   );
 }
 
+export const revalidate = 60;
+
 export default async function PublicSharePage({ params }: { params: { shareId: string } }) {
   const admin = getAdmin();
   const { data: project } = await admin
@@ -38,7 +40,17 @@ export default async function PublicSharePage({ params }: { params: { shareId: s
   ]);
 
   return (
-    <main className="max-w-3xl mx-auto p-6 space-y-8">
+    <main>
+      <header className="border-b bg-white/80 backdrop-blur-md sticky top-0 z-50">
+        <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
+          <a href="/" className="font-bold text-lg bg-gradient-to-r from-primary-600 to-accent-600 bg-clip-text text-transparent">Client Portal</a>
+          <nav className="text-sm flex items-center gap-4">
+            <a href="/" className="text-gray-700 hover:text-primary-700">Startseite</a>
+            <a href="/auth/login" className="text-gray-700 hover:text-primary-700">Login</a>
+          </nav>
+        </div>
+      </header>
+      <div className="max-w-3xl mx-auto p-6 space-y-8">
       <header>
         <h1 className="text-2xl font-semibold">{project.name}</h1>
         {project.client_name ? (
@@ -73,6 +85,7 @@ export default async function PublicSharePage({ params }: { params: { shareId: s
           ))}
         </ul>
       </section>
+      </div>
     </main>
   );
 }

@@ -62,7 +62,7 @@ export default async function ProfilePage() {
             <div className="relative">
               {profile?.avatar_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={profile.avatar_url} alt="Avatar" className="h-24 w-24 rounded-full object-cover border-4 border-primary-200 shadow-lg" />
+                <img src={profile.avatar_url} alt="Avatar" loading="lazy" className="h-24 w-24 rounded-full object-cover border-4 border-primary-200 shadow-lg" />
               ) : (
                 <div className="h-24 w-24 rounded-full bg-gradient-to-br from-primary-200 to-accent-200 flex items-center justify-center">
                   <svg className="w-12 h-12 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -22,7 +22,8 @@ export function middleware(req: NextRequest) {
   if (!access) {
     const url = req.nextUrl.clone();
     url.pathname = '/auth/login';
-    url.searchParams.set('next', pathname);
+    const original = pathname + (req.nextUrl.search || '');
+    url.searchParams.set('next', original);
     return NextResponse.redirect(url);
   }
 

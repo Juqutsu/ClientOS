@@ -58,6 +58,8 @@ export async function signup(formData: FormData) {
 export async function login(formData: FormData) {
   const email = String(formData.get('email') || '').trim();
   const password = String(formData.get('password') || '');
+  const nextRaw = String(formData.get('next') || '').trim();
+  const next = nextRaw && nextRaw.startsWith('/') ? nextRaw : '';
 
   const supabase = getSupabaseServer();
   const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -65,7 +67,7 @@ export async function login(formData: FormData) {
     redirect(`/auth/login?error=${encodeURIComponent(error.message)}`);
   }
 
-  redirect('/dashboard');
+  redirect(next || '/dashboard');
 }
 
 export async function logout() {
@@ -74,12 +76,14 @@ export async function logout() {
   redirect('/auth/login');
 }
 
-export async function oauth(provider: 'google' | 'github') {
+export async function oauth(provider: 'google' | 'github', next?: string) {
   const supabase = getSupabaseServer();
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const safeNext = next && next.startsWith('/') ? next : undefined;
+  const redirectTo = `${appUrl}/auth/callback${safeNext ? `?next=${encodeURIComponent(safeNext)}` : ''}`;
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider,
-    options: { redirectTo: `${appUrl}/auth/callback` },
+    options: { redirectTo },
   });
   if (error) {
     redirect(`/auth/login?error=${encodeURIComponent(error.message)}`);
@@ -92,12 +96,15 @@ export async function oauth(provider: 'google' | 'github') {
 
 export async function magicLink(formData: FormData) {
   const email = String(formData.get('email') || '').trim();
+  const nextRaw = String(formData.get('next') || '').trim();
+  const next = nextRaw && nextRaw.startsWith('/') ? nextRaw : '';
   if (!email) redirect('/auth/login?error=E-Mail%20erforderlich');
   const supabase = getSupabaseServer();
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const emailRedirectTo = `${appUrl}/auth/callback${next ? `?next=${encodeURIComponent(next)}` : ''}`;
   const { error } = await supabase.auth.signInWithOtp({
     email,
-    options: { emailRedirectTo: `${appUrl}/auth/callback` },
+    options: { emailRedirectTo },
   });
   if (error) {
     redirect(`/auth/login?error=${encodeURIComponent(error.message)}`);

@@ -16,6 +16,8 @@ export default function AuthPage({
     typeof searchParams?.error === "string" ? searchParams?.error : "";
   const success =
     typeof searchParams?.success === "string" ? searchParams?.success : "";
+  const next =
+    typeof searchParams?.next === "string" ? (searchParams.next as string) : "";
 
   return (
     <main className="min-h-screen grid place-items-center bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50 p-4">
@@ -67,6 +69,7 @@ export default function AuthPage({
                 className="input-field"
               />
             </div>
+            <input type="hidden" name="next" value={next} />
             <button
               type="submit"
               className="btn-primary w-full"
@@ -86,7 +89,7 @@ export default function AuthPage({
             <form
               action={async () => {
                 "use server";
-                await oauth("google");
+                await oauth("google", next);
               }}
             >
               <button
@@ -105,7 +108,7 @@ export default function AuthPage({
             <form
               action={async () => {
                 "use server";
-                await oauth("github");
+                await oauth("github", next);
               }}
             >
               <button
@@ -127,6 +130,7 @@ export default function AuthPage({
                 placeholder="E-Mail für Magic Link"
                 className="flex-1 input-field"
               />
+              <input type="hidden" name="next" value={next} />
               <button
                 type="submit"
                 className="px-4 py-2.5 border-2 border-primary-500 text-primary-600 rounded-lg hover:bg-primary-50 transition-all font-medium whitespace-nowrap"
